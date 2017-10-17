@@ -147,21 +147,31 @@ typedef struct {
         struct {
             uint64_t epoch;
             /* skip the type and versions */
-            uint16_t msg_len;
+            uint32_t msg_len;
         } __attribute__((packed)) hdr;
 
         struct {
-            uint32_t salt; /* fixed part */
-            uint64_t nonce; /* nonce + ctr = first 12 bytes of each record */
-            /* uint32_t ctr; */
+            uint32_t salt;
+            uint64_t nonce;
         } __attribute__((packed)) iv;
     } __attribute__((packed))
     ctxi, ctxo;
 
 } PAL_SEC_CONTEXT;
 
-int _DkStreamSecureInit (PAL_HANDLE stream, bool server, PAL_SESSION_KEY * key,
+#define SERVER_SIDE_EPOCH       \
+    ({ struct pal_stream_context * c; 1ULL << (sizeof(c->hdr.epoch) * 8 - 1); })
+
+#define MAX_EPOCH   (SERVER_SIDE_EPOCH - 1)
+
+#define PAL_STREAM_SERVER       1
+#define PAL_STREAM_CLIENT       2
+#define PAL_STREAM_PRIVATE      3
+
+int _DkStreamSecureInit (PAL_SESSION_KEY * key, unsigned which,
                          PAL_SEC_CONTEXT ** context);
+
+int _DkStreamSecureMigrate (PAL_SEC_CONTEXT * input, PAL_SEC_CONTEXT ** context);
 
 int _DkStreamSecureFree (PAL_SEC_CONTEXT * context);
 
@@ -237,6 +247,7 @@ char * __hex2str(void * hex, int size)
 #define DBG_S   0x08
 #define DBG_P   0x10
 #define DBG_M   0x20
+#define DBG_O   0x40
 
 #ifdef DEBUG
 # define DBG_LEVEL (DBG_E|DBG_I|DBG_D|DBG_S)

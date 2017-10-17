@@ -71,9 +71,7 @@ static int sgx_ocall_unmap_untrusted(void * pms)
 {
     ms_ocall_unmap_untrusted_t * ms = (ms_ocall_unmap_untrusted_t *) pms;
     ODEBUG(OCALL_UNMAP_UNTRUSTED, ms);
-    INLINE_SYSCALL(munmap, 2, ALLOC_ALIGNDOWN(ms->ms_mem),
-                   ALLOC_ALIGNUP(ms->ms_mem + ms->ms_size) -
-                   ALLOC_ALIGNDOWN(ms->ms_mem));
+    INLINE_SYSCALL(munmap, 2, ms->ms_mem, ms->ms_size);
     return 0;
 }
 

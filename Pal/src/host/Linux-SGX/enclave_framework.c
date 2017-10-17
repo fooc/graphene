@@ -32,9 +32,12 @@ void * sgx_ocalloc (uint64_t size)
 
 void * sgx_ocalloc_top (int64_t offset)
 {
-    assert(GET_ENCLAVE_TLS(ustack) == GET_ENCLAVE_TLS(ustack_top));
+    void * ustack_top = GET_ENCLAVE_TLS(ustack_top),
+         * ustack = GET_ENCLAVE_TLS(ustack);
 
-    void * ustack_top = GET_ENCLAVE_TLS(ustack_top) - offset;
+    assert(ustack_top == ustack);
+
+    ustack_top -= offset;
     SET_ENCLAVE_TLS(ustack_top, ustack_top);
     SET_ENCLAVE_TLS(ustack, ustack_top);
 
@@ -935,7 +938,7 @@ out:
     return ret;
 }
 
-int _DkStreamSecureInit (PAL_HANDLE stream, bool server, PAL_SESSION_KEY * key,
+int _DkStreamSecureInit (PAL_SESSION_KEY * key, unsigned which,
                          PAL_SEC_CONTEXT ** context)
 {
     PAL_SEC_CONTEXT * sec_ctx = malloc(sizeof(PAL_SEC_CONTEXT));
@@ -962,10 +965,32 @@ int _DkStreamSecureInit (PAL_HANDLE stream, bool server, PAL_SESSION_KEY * key,
 
     /* flip the first bit of the receiption epoch of the server and the sender
      * epoch of the client */
-    if (server)
-        sec_ctx->ctxi.hdr.epoch += 1ULL<<63;
-    else
-        sec_ctx->ctxo.hdr.epoch += 1ULL<<63;
+    if (which == PAL_STREAM_SERVER)
+        sec_ctx->ctxi.hdr.epoch |= SERVER_SIDE_EPOCH;
+    if (which == PAL_STREAM_CLIENT)
+        sec_ctx->ctxo.hdr.epoch |= SERVER_SIDE_EPOCH;
+
+    *context = sec_ctx;
+    return 0;
+}
+
+int _DkStreamSecureMigrate (PAL_SEC_CONTEXT * input, PAL_SEC_CONTEXT ** context)
+{
+    PAL_SEC_CONTEXT * sec_ctx = malloc(sizeof(PAL_SEC_CONTEXT));
+    int ret;
+
+    if (!sec_ctx)
+        return -PAL_ERROR_NOMEM;
+
+    memcpy(sec_ctx, input, sizeof(PAL_SEC_CONTEXT));
+
+    if ((ret = lib_AESGCMInit(&sec_ctx->ctxi.ctx, (uint8_t *) &sec_ctx->key,
+                              sizeof(sec_ctx->key))) < 0)
+        return ret;
+
+    if ((ret = lib_AESGCMInit(&sec_ctx->ctxo.ctx, (uint8_t *) &sec_ctx->key,
+                              sizeof(sec_ctx->key))) < 0)
+        return ret;
 
     *context = sec_ctx;
     return 0;
@@ -993,31 +1018,43 @@ int _DkStreamSecureRead (PAL_HANDLE handle,
 
     assert(ret == sizeof(ctx->hdr));
     int msg_len = ctx->hdr.msg_len - sizeof(ctx->hdr);
-    int enc_len = msg_len - sizeof(ctx->iv.nonce) - sizeof(tag);
+    int enc_len = msg_len - sizeof(tag);
+    uint8_t * input;
 
-    uint8_t * input = sgx_ocalloc_top(msg_len);
-
-    ret = read(handle, 0, msg_len, input);
-    if (ret < 0) {
-        sgx_ocalloc_top(-msg_len);
-        return ret;
+    if (msg_len < pal_state.pagesize) {
+        input = sgx_ocalloc_top(msg_len);
+    } else {
+        ret = ocall_alloc_untrusted(ALLOC_ALIGNUP(msg_len), (void **) &input);
+        if (ret < 0)
+            return ret;
     }
 
-    assert(ret == msg_len);
-    SGX_DBG(DBG_S, "[DEC %016llx] Received %d bytes from the stream\n",
-            ctx->hdr.epoch, ret + sizeof(ctx->hdr));
+    int received = 0;
+    while (received < msg_len) {
+        ret = read(handle, 0, msg_len - received, input + received);
+        if (ret < 0)
+            goto out;
 
-    memcpy(&ctx->iv.nonce, input, sizeof(ctx->iv.nonce));
-    input += sizeof(ctx->iv.nonce);
+        received += ret;
+    }
+
+    SGX_DBG(DBG_O, "[DEC %08lx] Received %d bytes from the stream\n",
+            ctx->hdr.epoch, received + sizeof(ctx->hdr));
+
+    ctx->iv.nonce = ctx->hdr.epoch;
     memcpy(&tag, input + enc_len, sizeof(tag));
 
-    SGX_DBG(DBG_S, "[DEC %016llx] Header = %s IV = %s\n",
+    SGX_DBG(DBG_O, "[DEC %08lx] Header = %s IV = %s\n",
             ctx->hdr.epoch,
             __hex2str(&ctx->hdr, sizeof(ctx->hdr)),
             __hex2str(&ctx->iv,  sizeof(ctx->iv)));
 
-    SGX_DBG(DBG_S, "[DEC %016llx] Enc = %s Tag = %s\n",
-            ctx->hdr.epoch, __hex2str(input, enc_len), hex2str(tag));
+    if (enc_len > 16)
+        SGX_DBG(DBG_O, "[DEC %08lx] Enc = %s ... (%d bytes) Tag = %s\n",
+                ctx->hdr.epoch, __hex2str(input, 16), enc_len, hex2str(tag));
+    else
+        SGX_DBG(DBG_O, "[DEC %08lx] Enc = %s Tag = %s\n",
+                ctx->hdr.epoch, __hex2str(input, enc_len), hex2str(tag));
 
     uint64_t dec_len = count;
     ret = lib_AESGCMAuthDecrypt(&ctx->ctx,
@@ -1029,8 +1066,15 @@ int _DkStreamSecureRead (PAL_HANDLE handle,
                                 (uint8_t *) buffer, &dec_len,
                                 (uint8_t *) &tag, sizeof(tag));
 
-    sgx_ocalloc_top(-msg_len);
     ctx->hdr.epoch++;
+    assert((ctx->hdr.epoch & ~SERVER_SIDE_EPOCH) < MAX_EPOCH);
+
+out:
+    if (msg_len < pal_state.pagesize)
+        sgx_ocalloc_top(-msg_len);
+    else
+        ocall_unmap_untrusted(input, ALLOC_ALIGNUP(msg_len));
+
     return ret < 0 ? ret : dec_len;
 }
 
@@ -1042,22 +1086,28 @@ int _DkStreamSecureWrite (PAL_HANDLE handle,
     uint8_t tag[GCM_TAG_SIZE];
     int ret;
 
-    int msg_len = sizeof(ctx->hdr) +
-                  sizeof(ctx->iv.nonce) + count + sizeof(tag);
+    int msg_len = sizeof(ctx->hdr) + count + sizeof(tag);
 
     ctx->hdr.msg_len = msg_len;
+    ctx->iv.nonce = ctx->hdr.epoch;
 
-    SGX_DBG(DBG_S, "[ENC %016llx] Header = %s IV = %s\n",
+    SGX_DBG(DBG_O, "[ENC %08lx] Header = %s IV = %s\n",
             ctx->hdr.epoch,
             __hex2str(&ctx->hdr, sizeof(ctx->hdr)),
             __hex2str(&ctx->iv,  sizeof(ctx->iv)));
 
-    uint8_t * output = sgx_ocalloc_top(msg_len);
+    uint8_t * output;
+    if (msg_len < pal_state.pagesize) {
+        output = sgx_ocalloc_top(msg_len);
+    } else {
+        ret = ocall_alloc_untrusted(ALLOC_ALIGNUP(msg_len), (void **) &output);
+        if (ret < 0)
+            return ret;
+    }
+
     uint8_t * enc = output + sizeof(ctx->hdr);
-    memcpy(output, &ctx->hdr, sizeof(ctx->hdr));
-    memcpy(enc, &ctx->iv.nonce, sizeof(ctx->iv.nonce));
-    enc += sizeof(ctx->iv.nonce);
     uint64_t enc_len = 0;
+    memcpy(output, &ctx->hdr, sizeof(ctx->hdr));
 
     ret = lib_AESGCMAuthEncrypt(&ctx->ctx,
                                 (const uint8_t *) &ctx->iv,
@@ -1068,28 +1118,40 @@ int _DkStreamSecureWrite (PAL_HANDLE handle,
                                 (uint8_t *) enc, &enc_len,
                                 (uint8_t *) &tag, sizeof(tag));
 
-    if (ret < 0) {
-        sgx_ocalloc_top(-msg_len);
-        return ret;
-    }
+    if (ret < 0)
+        goto out;
 
-    SGX_DBG(DBG_S, "[ENC %016llx] Enc = %s Tag = %s\n",
-            ctx->hdr.epoch, __hex2str(enc, enc_len), hex2str(tag));
+    assert(enc_len > 0);
 
-    assert(sizeof(ctx->hdr) + sizeof(ctx->iv.nonce) + enc_len + sizeof(tag)
-           == msg_len);
+    if (enc_len > 16)
+        SGX_DBG(DBG_O, "[ENC %08lx] Enc = %s ... (%d bytes) Tag = %s\n",
+                ctx->hdr.epoch, __hex2str(enc, 16), enc_len, hex2str(tag));
+    else
+        SGX_DBG(DBG_O, "[ENC %08lx] Enc = %s Tag = %s\n",
+                ctx->hdr.epoch, __hex2str(enc, enc_len), hex2str(tag));
+
+    SGX_DBG(DBG_O, "[ENC %08lx] Sending %d bytes to the stream\n",
+            ctx->hdr.epoch, msg_len);
 
     memcpy(enc + enc_len, &tag, sizeof(tag));
 
-    ret = write(handle, 0, msg_len, output);
-    sgx_ocalloc_top(-msg_len);
-    if (ret < 0)
-        return ret;
+    int sent = 0;
+    while (sent < msg_len) {
+        ret = write(handle, 0, msg_len - sent, output + sent);
+        if (ret < 0)
+            goto out;
 
-    SGX_DBG(DBG_S, "[ENC %016llx] Sent %d bytes to the stream\n",
-            ctx->hdr.epoch, ret);
+        sent += ret;
+    }
 
-    assert(ret == msg_len);
     ctx->hdr.epoch++;
-    return count;
+    assert((ctx->hdr.epoch & ~SERVER_SIDE_EPOCH) < MAX_EPOCH);
+
+out:
+    if (msg_len < pal_state.pagesize)
+        sgx_ocalloc_top(-msg_len);
+    else
+        ocall_unmap_untrusted(output, ALLOC_ALIGNUP(msg_len));
+
+    return ret < 0 ? ret : count;
 }

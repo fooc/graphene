@@ -50,6 +50,11 @@ static int proc_read  (PAL_HANDLE handle, int offset, int size,
 static int proc_write (PAL_HANDLE handle, int offset, int size,
                        const void * buffer);
 
+static int proc_secure_read  (PAL_HANDLE handle, int offset, int size,
+                              void * buffer);
+static int proc_secure_write (PAL_HANDLE handle, int offset, int size,
+                              const void * buffer);
+
 struct trusted_child {
     struct list_head list;
     sgx_arch_hash_t mrenclave;
@@ -247,8 +252,13 @@ int _DkProcessCreate (PAL_HANDLE * handle, const char * uri,
     if (ret < 0)
         return ret;
 
-    ret = _DkStreamSecureInit(proc, true, &key,
+    ret = _DkStreamSecureInit(&key, PAL_STREAM_SERVER,
                               (PAL_SEC_CONTEXT **) &proc->process.sec_ctx);
+    if (ret < 0)
+        return ret;
+
+    ret = proc_secure_write(proc, 0, sizeof(pal_enclave_sec),
+                            &pal_enclave_sec);
     if (ret < 0)
         return ret;
 
@@ -321,8 +331,13 @@ int init_child_process (PAL_HANDLE * parent_handle)
     if (ret < 0)
         return ret;
 
-    ret = _DkStreamSecureInit(parent, false, &key,
+    ret = _DkStreamSecureInit(&key, PAL_STREAM_CLIENT,
                               (PAL_SEC_CONTEXT **) &parent->process.sec_ctx);
+    if (ret < 0)
+        return ret;
+
+    ret = proc_secure_read(parent, 0, sizeof(pal_enclave_sec),
+                           &pal_enclave_sec);
     if (ret < 0)
         return ret;
 

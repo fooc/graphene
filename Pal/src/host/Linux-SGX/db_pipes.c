@@ -87,6 +87,7 @@ static int pipe_listen (PAL_HANDLE * handle, PAL_NUM pipeid, int options)
     HANDLE_HDR(hdl)->flags |= RFD(0);
     hdl->pipe.fd = ret;
     hdl->pipe.pipeid = pipeid;
+    hdl->pipe.sec_ctx = NULL;
     hdl->pipe.nonblocking = options & PAL_OPTION_NONBLOCK ?
                             PAL_TRUE : PAL_FALSE;
     *handle = hdl;
@@ -111,13 +112,10 @@ static int pipe_waitforclient (PAL_HANDLE handle, PAL_HANDLE * client)
     HANDLE_HDR(clnt)->flags |= RFD(0)|WFD(0)|WRITEABLE(0);
     clnt->pipe.fd = ret;
     clnt->pipe.pipeid = handle->pipe.pipeid;
+    clnt->pipe.sec_ctx = NULL;
+    clnt->pipe.nonblocking = handle->pipe.nonblocking;
 
-    PAL_SESSION_KEY key;
-    ret = _DkStreamKeyExchange(clnt, &key, pipe_read, pipe_write);
-    if (ret < 0)
-        return ret;
-
-    ret = _DkStreamSecureInit(clnt, true, &key,
+    ret = _DkStreamSecureInit(&pal_enclave_sec.rpc_key, PAL_STREAM_SERVER,
                               (PAL_SEC_CONTEXT **) &clnt->pipe.sec_ctx);
     if (ret < 0)
         return ret;
@@ -146,15 +144,11 @@ static int pipe_connect (PAL_HANDLE * handle, PAL_NUM pipeid, int options)
     HANDLE_HDR(hdl)->flags |= RFD(0)|WFD(0)|WRITEABLE(0);
     hdl->pipe.fd = ret;
     hdl->pipe.pipeid = pipeid;
+    hdl->pipe.sec_ctx = NULL;
     hdl->pipe.nonblocking = (options & PAL_OPTION_NONBLOCK) ?
                             PAL_TRUE : PAL_FALSE;
 
-    PAL_SESSION_KEY key;
-    ret = _DkStreamKeyExchange(hdl, &key, pipe_read, pipe_write);
-    if (ret < 0)
-        return ret;
-
-    ret = _DkStreamSecureInit(hdl, false, &key,
+    ret = _DkStreamSecureInit(&pal_enclave_sec.rpc_key, PAL_STREAM_CLIENT,
                               (PAL_SEC_CONTEXT **) &hdl->pipe.sec_ctx);
     if (ret < 0)
         return ret;
@@ -179,8 +173,15 @@ static int pipe_private (PAL_HANDLE * handle, int options)
     HANDLE_HDR(hdl)->flags |= RFD(0)|WFD(1)|WRITEABLE(1);
     hdl->pipeprv.fds[0] = fds[0];
     hdl->pipeprv.fds[1] = fds[1];
+    hdl->pipeprv.sec_ctx = NULL;
     hdl->pipeprv.nonblocking = (options & PAL_OPTION_NONBLOCK) ?
                                 PAL_TRUE : PAL_FALSE;
+
+    ret = _DkStreamSecureInit(&pal_enclave_sec.rpc_key, PAL_STREAM_PRIVATE,
+                              (PAL_SEC_CONTEXT **) &hdl->pipeprv.sec_ctx);
+    if (ret < 0)
+        return ret;
+
     *handle = hdl;
     return 0;
 }

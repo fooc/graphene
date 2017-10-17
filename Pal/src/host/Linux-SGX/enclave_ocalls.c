@@ -213,16 +213,9 @@ int ocall_read (int fd, void * buf, unsigned int count)
 {
     int retval = 0;
     void * obuf = NULL;
-    bool must_free_obuf = false;
 
-    if (buf && !sgx_is_within_enclave(buf, count)) {
+    if (buf && !sgx_is_within_enclave(buf, count))
         obuf = buf;
-    } else if (count > 4096) {
-        retval = ocall_alloc_untrusted(ALLOC_ALIGNUP(count), &obuf);
-        if (retval < 0)
-            return retval;
-        must_free_obuf = true;
-    }
 
     ms_ocall_read_t * ms;
     OCALLOC(ms, ms_ocall_read_t *, sizeof(*ms));
@@ -240,10 +233,6 @@ int ocall_read (int fd, void * buf, unsigned int count)
         memcpy(buf, ms->ms_buf, retval);
 
     OCALL_EXIT();
-
-    if (obuf && must_free_obuf)
-        ocall_unmap_untrusted(obuf, ALLOC_ALIGNUP(count));
-
     return retval;
 }
 
@@ -251,16 +240,9 @@ int ocall_write (int fd, const void * buf, unsigned int count)
 {
     int retval = 0;
     void * obuf = NULL;
-    bool must_free_obuf = false;
 
-    if (buf && !sgx_is_within_enclave(buf, count)) {
+    if (buf && !sgx_is_within_enclave(buf, count))
         obuf = (void *) buf;
-    } else if (count > 4096) {
-        retval = ocall_alloc_untrusted(ALLOC_ALIGNUP(count), &obuf);
-        if (retval < 0)
-            return retval;
-        must_free_obuf = true;
-    }
 
     ms_ocall_write_t * ms;
     OCALLOC(ms, ms_ocall_write_t *, sizeof(*ms));
@@ -277,10 +259,6 @@ int ocall_write (int fd, const void * buf, unsigned int count)
 
     retval = SGX_OCALL(OCALL_WRITE, ms);
     OCALL_EXIT();
-
-    if (obuf && must_free_obuf)
-        ocall_unmap_untrusted(obuf, ALLOC_ALIGNUP(count));
-
     return retval;
 }
 
@@ -572,12 +550,21 @@ int ocall_sock_recv (int sockfd, void * buf, unsigned int count,
                      struct sockaddr * addr, unsigned int * addrlen)
 {
     int retval = 0;
+    void * obuf = NULL;
+
+    if (buf && !sgx_is_within_enclave(buf, count))
+        obuf = buf;
+
     unsigned int len = addrlen ? *addrlen : 0;
     ms_ocall_sock_recv_t * ms;
     OCALLOC(ms, ms_ocall_sock_recv_t *, sizeof(*ms));
 
     ms->ms_sockfd = sockfd;
-    ms->ms_buf = ALLOC_IN_USER(buf, count);
+    if (obuf) {
+        ms->ms_buf = obuf;
+    } else {
+        ms->ms_buf = ALLOC_IN_USER(buf, count);
+    }
     ms->ms_count = count;
     ms->ms_addr = addr ? ALLOC_IN_USER(addr, len) : NULL;
     ms->ms_addrlen = len;
@@ -590,7 +577,9 @@ int ocall_sock_recv (int sockfd, void * buf, unsigned int count,
             return -PAL_ERROR_DENIED;
         }
 
-        COPY_FROM_USER(buf, ms->ms_buf, retval);
+        if (buf != obuf)
+            COPY_FROM_USER(buf, ms->ms_buf, retval);
+
         COPY_FROM_USER(addr, ms->ms_addr, ms->ms_addrlen);
         if (addrlen)
             *addrlen = ms->ms_addrlen;
@@ -621,11 +610,20 @@ int ocall_sock_recv_fd (int sockfd, void * buf, unsigned int count,
                         unsigned int * fds, unsigned int * nfds)
 {
     int retval = 0;
+    void * obuf = NULL;
+
+    if (buf && !sgx_is_within_enclave(buf, count))
+        obuf = buf;
+
     ms_ocall_sock_recv_fd_t * ms;
     OCALLOC(ms, ms_ocall_sock_recv_fd_t *, sizeof(*ms));
 
     ms->ms_sockfd = sockfd;
-    ms->ms_buf = ALLOC_IN_USER(buf, count);
+    if (obuf) {
+        ms->ms_buf = obuf;
+    } else {
+        ms->ms_buf = ALLOC_IN_USER(buf, count);
+    }
     ms->ms_count = count;
     ms->ms_fds = fds ? ALLOC_IN_USER(fds, sizeof(int) * (*nfds)) : NULL;
     ms->ms_nfds = *nfds;
@@ -638,7 +636,9 @@ int ocall_sock_recv_fd (int sockfd, void * buf, unsigned int count,
             return -PAL_ERROR_DENIED;
         }
 
-        COPY_FROM_USER(buf, ms->ms_buf, retval);
+        if (buf != obuf)
+            COPY_FROM_USER(buf, ms->ms_buf, retval);
+
         COPY_FROM_USER(fds, ms->ms_fds, sizeof(int) * ms->ms_nfds);
         *nfds = ms->ms_nfds;
     }
