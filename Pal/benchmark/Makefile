@@ -2,7 +2,9 @@ SYS ?= $(shell gcc -dumpmachine)
 
 CC	= gcc
 CFLAGS	= -Wall -O2 -std=gnu99 -fgnu89-inline -fno-builtin -nostdlib \
-	  -I../include/pal -I../lib
+	  -I../include/pal -I../lib \
+	  -fno-omit-frame-pointer \
+	  -fno-stack-protector -fno-builtin
 
 default: all
 include ../src/Makefile.Test
@@ -15,7 +17,7 @@ target = $(executables) $(manifests)
 
 graphene_lib = .lib/graphene-lib.a
 pal_lib = ../src/libpal.so
-headers = $(wildcard ../include/pal/*.h)
+headers = $(wildcard ../include/pal/*.h) $(wildcard *.h)
 
 all:	pal_loader $(call expand_target,$(target))
 
@@ -34,9 +36,13 @@ manifest: manifest.template
 	cp -f $< $@
 
 ifeq ($(SYS),x86_64-linux-gnu)
-$(executables): %: %.c $(graphene_lib) $(pal_lib) $(patsubst %.c,%.o,$(lib_files)) ../src/user_start.o
+$(executables): %: %.c $(graphene_lib) $(pal_lib) $(patsubst %.c,%.o,$(lib_files)) ../src/user_start.o $(headers)
 	@echo [ $@ ]
-	@$(CC) $(CFLAGS) $(if $(filter Pie,$@),-fPIC -pie,) $^ -o $@
+	@$(CC) $(CFLAGS) $^ -o $@
+
+%.o: %.c $(headers)
+	@echo [ $@ ]
+	@$(CC) $(CFLAGS) -c $< -o $@
 
 $(graphene_lib):
 	$(MAKE) -C ../lib target=$(shell pwd)/.lib/

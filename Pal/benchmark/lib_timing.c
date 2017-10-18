@@ -37,7 +37,7 @@ uint64_t stop (uint64_t * begin, uint64_t * end)
     if (begin == NULL)
         begin = &start_time;
 
-    return end - begin;
+    return *end - *begin;
 }
 
 void save_n(uint64_t n)
@@ -84,18 +84,18 @@ void bandwidth (uint64_t bytes, uint64_t times, int verbose)
     secs /= times;
     mb = bytes / MB;
     if (verbose) {
-        pal_printf("%.4f MB in %.4f secs, %.4f MB/sec\n",
-                   mb, secs, mb/secs);
+        pal_printf(FLOATFMT(4) " MB in " FLOATFMT(4) " secs, " FLOATFMT(4) " MB/sec\n",
+                   FLOATNUM(mb, 4), FLOATNUM(secs, 4), FLOATNUM(mb/secs, 4));
     } else {
         if (mb < 1) {
-            pal_printf("%.6f ", mb);
+            pal_printf(FLOATFMT(6) " ", FLOATNUM(mb, 6));
         } else {
-            pal_printf("%.2f ", mb);
+            pal_printf(FLOATFMT(2) " ", FLOATNUM(mb, 2));
         }
         if (mb / secs < 1) {
-            pal_printf("%.6f\n", mb/secs);
+            pal_printf(FLOATFMT(6) "\n", FLOATNUM(mb/secs, 6));
         } else {
-            pal_printf("%.2f\n", mb/secs);
+            pal_printf(FLOATFMT(2) "\n", FLOATNUM(mb/secs, 2));
         }
     }
 }
@@ -108,7 +108,7 @@ kb(uint64_t bytes)
     s = (stop_time - start_time) / 1000000.0;
     bs = bytes / nz(s);
 
-    pal_printf("%.0f KB/sec\n", bs / KB);
+    pal_printf("%ld KB/sec\n", (long) (bs / KB));
 }
 
 void mb (uint64_t bytes)
@@ -118,7 +118,7 @@ void mb (uint64_t bytes)
     s = (stop_time - start_time) / 1000000.0;
     bs = bytes / nz(s);
 
-    pal_printf("%.2f MB/sec\n", bs / MB);
+    pal_printf(FLOATFMT(2) " MB/sec\n", FLOATNUM(bs / MB, 2));
 }
 
 void latency (uint64_t xfers, uint64_t size)
@@ -131,19 +131,19 @@ void latency (uint64_t xfers, uint64_t size)
         pal_printf("%d %dKB xfers in %.2f secs, ",
                   (int) xfers, (int) (size / KB), s);
     } else {
-        pal_printf("%.1fKB in ", size / KB);
+        pal_printf(FLOATFMT(1) "KB in ", FLOATNUM(size / KB, 1));
     }
     if ((s * 1000 / xfers) > 100) {
-        pal_printf("%.0f millisec%s, ",
-                   s * 1000 / xfers, xfers > 1 ? "/xfer" : "s");
+        pal_printf("%ld millisec%s, ",
+                   (long) (s * 1000 / xfers), xfers > 1 ? "/xfer" : "s");
     } else {
-        pal_printf("%.4f millisec%s, ",
-                   s * 1000 / xfers, xfers > 1 ? "/xfer" : "s");
+        pal_printf(FLOATFMT(4) " millisec%s, ",
+                   FLOATNUM(s * 1000 / xfers, 4), xfers > 1 ? "/xfer" : "s");
     }
     if (((xfers * size) / (MB * s)) > 1) {
-        pal_printf("%.2f MB/sec\n", (xfers * size) / (MB * s));
+        pal_printf(FLOATFMT(2) " MB/sec\n", FLOATNUM((xfers * size) / (MB * s), 2));
     } else {
-        pal_printf("%.2f KB/sec\n", (xfers * size) / (KB * s));
+        pal_printf(FLOATFMT(2) " KB/sec\n", FLOATNUM((xfers * size) / (KB * s), 2));
     }
 }
 
@@ -155,14 +155,14 @@ nano(char *s, uint64_t n)
     micro = stop_time - start_time;
     micro *= 1000;
 
-    pal_printf("%s: %.0f nanoseconds\n", s, micro / n);
+    pal_printf("%s: %ld nanoseconds\n", s, (long) (micro / n));
 }
 
 static result_t results;
 
 void micro (const char * s , uint64_t n)
 {
-    double micro, mean, var;
+    double micro, mean, var, ci;
 
     micro = stop_time - start_time;
     micro /= n;
@@ -173,9 +173,11 @@ void micro (const char * s , uint64_t n)
     var = getvariancetime();
     if (var < 0.0)
         var = 0.0;
+    ci = ci_width(sqrt(var), results.N);
 
-    pal_printf("%s median=%.4lf [mean=%.4lf +/-%.4lf] microseconds\n",
-               s, micro, mean, ci_width(sqrt(var), results.N));
+    pal_printf("%s median=" FLOATFMT(4) " [mean=" FLOATFMT(4) " +/-" FLOATFMT(4)
+               "] microseconds\n",
+               s, FLOATNUM(micro, 4), FLOATNUM(mean, 4), FLOATNUM(ci, 4));
 }
 
 void
@@ -189,9 +191,10 @@ micromb(uint64_t sz, uint64_t n)
     mb /= MB;
 
     if (micro >= 10) {
-        pal_printf("%.6f %.0f\n", mb, micro);
+        pal_printf(FLOATFMT(6) " %ld\n", FLOATNUM(mb, 6), (long) micro);
     } else {
-        pal_printf("%.6f %.3f\n", mb, micro);
+        pal_printf(FLOATFMT(6) " " FLOATFMT(3) "\n", FLOATNUM(mb, 6),
+                   FLOATNUM(micro, 6));
     }
 }
 
@@ -213,8 +216,8 @@ ptime(uint64_t n)
 
     s = (stop_time - start_time) / 1000000.0;
 
-    pal_printf("%d in %.2f secs, %.0f microseconds each\n",
-               (int)n, s, s * 1000000 / n);
+    pal_printf("%d in " FLOATFMT(2) " secs, %ld microseconds each\n",
+               (int)n, FLOATNUM(s, 2), (long) (s * 1000000 / n));
 }
 
 double getmeantime(void)
@@ -292,7 +295,7 @@ print_results(int details)
     int i;
 
     for (i = 0; i < results.N; ++i) {
-        pal_printf("%.2f", (double)results.u[i]/results.n[i]);
+        pal_printf(FLOATFMT(2), FLOATNUM((double)results.u[i]/results.n[i], 2));
         if (i < results.N - 1)
             pal_printf(" ");
     }

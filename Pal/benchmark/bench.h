@@ -57,6 +57,7 @@ void start (uint64_t * time);
 uint64_t stop (uint64_t * begin, uint64_t * end);
 
 double ci_width (double stddev, int n);
+double sqrt (double x);
 
 #define BENCHO(loop_body, overhead_body, enough) {              \
         int __i, __N; double __oh; result_t __overhead, __r;    \
@@ -109,8 +110,9 @@ double ci_width (double stddev, int n);
                                                                 \
         while(__result < 0.95 * __enough) {                     \
             start(0);                                           \
-            for (__n = __iterations; __n > 0; __n--)            \
+            for (__n = __iterations; __n > 0; __n--) {          \
                 loop_body;                                      \
+            }                                                   \
             __result = stop(0,0);                               \
             if (__result < 0.99 * __enough                      \
                 || __result > 1.2 * __enough) {                 \
