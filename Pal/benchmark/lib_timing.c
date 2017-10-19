@@ -245,10 +245,19 @@ uint64_t gettime (void)
     return stop_time - start_time;
 }
 
-char last (char *s)
+uint64_t bytes (const char * s)
 {
-    while (*s++);
-    return (s[-2]);
+    uint64_t n = 0;
+
+    for (; *s >= '0' && *s <= '9' ; s++)
+        n = n * 10 + (*s - '0');
+
+    if (*s == 'k' || *s == 'K')
+        n *= 1024;
+    if (*s == 'm' || *s == 'M')
+        n *= 1024 * 1024;
+
+    return n;
 }
 
 void use_pointer (void * result)

@@ -6,6 +6,8 @@
 #include "pal_debug.h"
 #include "bench.h"
 
+#define PORT    8000
+
 static void client_main (int argc, const char ** argv);
 static void server_main (int argc, const char ** argv);
 
@@ -32,14 +34,17 @@ int main (int argc, const char ** argv, const char ** envp)
     }
 
     if (argc != 2 && argc != 3) {
-        pal_printf("Usage: pal_loader %s -s OR pal_loader %s [-]serverhost [proto]\n",
-                   argv[0], argv[0]);
+usage:
+        pal_printf("Usage: pal_loader %s -s [serverhost] OR "
+                   "pal_loader %s [-]serverhost\n", argv[0], argv[0]);
         return 1;
     }
 
     if (strcmp_static(argv[1], "-s")) {
         server_main(argc, argv);
     } else {
+        if (argc != 2)
+            goto usage;
         client_main(argc, argv);
     }
 
@@ -59,7 +64,8 @@ static void client_main(int argc, const char ** argv)
     }
 
     server = argv[1][0] == '-' ? &argv[1][1] : argv[1];
-    sock = DkStreamOpen(server, PAL_ACCESS_RDWR, 0, 0, 0);
+    snprintf(buf, 256, "udp:%s:%d", server, PORT);
+    sock = DkStreamOpen(buf, PAL_ACCESS_RDWR, 0, 0, 0);
     if (!sock) {
         pal_printf("UDP connection failed\n");
         DkProcessExit(1);
@@ -86,8 +92,11 @@ static void server_main(int argc, const char ** argv)
 {
     PAL_HANDLE sock;
     int net, sent, seq = 0;
+    char buf[256];
+    const char * host = (argc == 3) ? argv[2] : "127.0.0.1";
+    snprintf(buf, 256, "udp.srv:%s:%d", host, PORT);
 
-    sock = DkStreamOpen("udp.srv:127.0.0.1:8000", 0, 0, 0, 0);
+    sock = DkStreamOpen(buf, 0, 0, 0, 0);
     if (!sock) {
         pal_printf("create UDP server failed\n");
         DkProcessExit(1);

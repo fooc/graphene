@@ -6,6 +6,10 @@
 
 #include <stdint.h>
 
+#ifndef XFERSIZE
+#define XFERSIZE        (64*1024)   /* all bandwidth I/O should use this */
+#endif
+
 #define REAL_SHORT        50000
 #define SHORT           1000000
 #define MEDIUM          2000000
@@ -45,6 +49,7 @@ double calc_variance_rate (double mean, double *times, int size,
 double calc_mean (double *times, int size);
 double calc_mean_rate (double *times, int size, int ops_per_measure);
 
+uint64_t bytes (const char * s);
 double l_overhead (void);
 uint64_t t_overhead (void);
 int get_enough (int);
@@ -52,7 +57,9 @@ void save_n (uint64_t);
 uint64_t get_n (void);
 void settime (uint64_t usecs);
 uint64_t gettime (void);
+void mb (uint64_t bytes);
 void micro (const char * s, uint64_t n);
+void micromb (uint64_t mb, uint64_t n);
 void start (uint64_t * time);
 uint64_t stop (uint64_t * begin, uint64_t * end);
 

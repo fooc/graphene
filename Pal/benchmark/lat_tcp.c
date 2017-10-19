@@ -6,41 +6,42 @@
 #include "pal_debug.h"
 #include "bench.h"
 
-static void client_main(int argc, char ** argv);
+#define PORT    8000
+
+static void client_main(int argc, const char ** argv);
 static void doclient(PAL_HANDLE sock);
-static void server_main(int argc, char ** argv);
+static void server_main(int argc, const char ** argv);
 static int  doserver(PAL_HANDLE sock);
 
-int main (int argc, char ** argv, char ** envp)
+int main (int argc, const char ** argv, const char ** envp)
 {
-    if (argc != 2) {
-        pal_printf("Usage: pal_loader %s -s OR pal_loader %s [-]serverhost\n",
-                   argv[0], argv[0]);
+    if (argc != 2 && argc != 3) {
+usage:
+        pal_printf("Usage: pal_loader %s -s [serverhost] OR "
+                   "pal_loader %s [-]serverhost\n", argv[0], argv[0]);
         return 1;
     }
 
     if (strcmp_static(argv[1], "-s")) {
         server_main(argc, argv);
     } else {
+        if (argc != 2)
+            goto usage;
         client_main(argc, argv);
     }
     return(0);
 }
 
-static void client_main(int argc, char **argv)
+static void client_main(int argc, const char **argv)
 {
     PAL_HANDLE sock;
-    char *server;
-    char buf[100];
+    const char * server;
+    char buf[256];
 
     server = argv[1][0] == '-' ? &argv[1][1] : argv[1];
+    snprintf(buf, 256, "tcp:%s:%d", server, PORT);
 
-    if (memcmp(server, "tcp:", 4)) {
-        pal_printf("Only TCP URI is allowed.\n");
-        return;
-    }
-
-    sock = DkStreamOpen(server, PAL_ACCESS_RDWR, 0, 0, 0);
+    sock = DkStreamOpen(buf, PAL_ACCESS_RDWR, 0, 0, 0);
 
     /*
      * Stop server code.
@@ -51,7 +52,7 @@ static void client_main(int argc, char **argv)
     }
 
     BENCH(doclient(sock), MEDIUM);
-    snprintf(buf, 100, "TCP latency using %s", argv[1]);
+    snprintf(buf, 256, "TCP latency using %s", argv[1]);
     micro(buf, get_n());
 }
 
@@ -62,11 +63,14 @@ static void doclient(PAL_HANDLE sock)
     DkStreamRead(sock, 0, 1, &c, NULL, 0);
 }
 
-static void server_main(int argc, char ** argv)
+static void server_main (int argc, const char ** argv)
 {
     PAL_HANDLE newsock, sock;
+    char buf[256];
+    const char * host = (argc == 3) ? argv[2] : "127.0.0.1";
+    snprintf(buf, 256, "tcp.srv:%s:%d", host, PORT);
 
-    sock = DkStreamOpen("tcp.srv:127.0.0.1:8000", 0, 0, 0, 0);
+    sock = DkStreamOpen(buf, 0, 0, 0, 0);
     for (;;) {
         newsock = DkStreamWaitForClient(sock);
         if (doserver(newsock))
