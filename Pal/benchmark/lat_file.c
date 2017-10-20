@@ -6,6 +6,8 @@
 #include "pal_debug.h"
 #include "bench.h"
 
+#define FNAME "/usr/include/x86_64-linux-gnu/sys/types.h"
+
 static void
 do_read(PAL_HANDLE stream, const char * filename)
 {
@@ -70,16 +72,13 @@ do_attrquerybyhdl(PAL_HANDLE stream, const char * filename)
 
 int main (int argc, char ** argv, char ** envp)
 {
-    const char * uri;
     PAL_HANDLE stream;
+    const char * path;
+    char uri[256];
 
     if (argc < 2) goto usage;
-    uri = argv[2] ? argv[2] : "file:/dev/zero";
-
-    if (memcmp(uri, "file:", 5)) {
-        pal_printf("Only file uri is allowed.\n");
-        return 1;
-    }
+    path = argv[2] ? argv[2] : FNAME;
+    snprintf(uri, 256, "file:%s", path);
 
     if (strcmp_static(argv[1], "read")) {
         stream = DkStreamOpen(uri, PAL_ACCESS_RDWR, 0, 0, 0);

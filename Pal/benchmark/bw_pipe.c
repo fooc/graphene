@@ -15,15 +15,17 @@ char * buf;
 int main (int argc, char ** argv, char ** envp)
 {
     PAL_HANDLE proc, srv, control, pipe;
+    uint64_t msgsize = XFERSIZE, memsize;
 
-    buf = DkVirtualMemoryAlloc(NULL, XFERSIZE + pal_control.pagesize,
-                               0, PAL_PROT_READ|PAL_PROT_WRITE);
+    memsize = msgsize + pal_control.pagesize - msgsize % pal_control.pagesize;
+    buf = DkVirtualMemoryAlloc(NULL, memsize, 0,
+                               PAL_PROT_READ|PAL_PROT_WRITE);
     if (!buf) {
         pal_printf("No memory\n");
         return(1);
     }
 
-    memset(buf, 0, XFERSIZE + pal_control.pagesize);
+    memset(buf, 0, msgsize);
 
     if (argc == 1) {
         const char * newargv[3];

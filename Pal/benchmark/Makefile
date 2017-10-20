@@ -55,6 +55,9 @@ $(executables): .packed/benchmark.tar.gz
 	tar -xmozf $< $@
 endif
 
+test: all
+	env LOADER=./pal_loader OS=PAL OUTPUT=lmbench-results ./lmbench
+
 clean:
 	rm -rf $(patsubst %.c,%.o,$(lib_files))
 	rm -rf pal_loader $(call expand_target,$(target)) .lib *.cached

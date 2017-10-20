@@ -30,7 +30,7 @@ static void transfer(uint64_t msgsize, PAL_HANDLE server, char * buf)
 static void client_main(int argc, const char ** argv)
 {
     PAL_HANDLE server;
-    uint64_t msgsize = XFERSIZE;
+    uint64_t msgsize = XFERSIZE, memsize;
     char uri[256];
     char t[512];
     char * buf;
@@ -57,8 +57,9 @@ static void client_main(int argc, const char ** argv)
         DkProcessExit(0);
     }
 
-    buf = DkVirtualMemoryAlloc(NULL, msgsize + pal_control.pagesize,
-                               0, PAL_PROT_READ|PAL_PROT_WRITE);
+    memsize = msgsize + pal_control.pagesize - msgsize % pal_control.pagesize;
+    buf = DkVirtualMemoryAlloc(NULL, memsize, 0,
+                               PAL_PROT_READ|PAL_PROT_WRITE);
     if (!buf) {
         pal_printf("No memory\n");
         DkProcessExit(1);
@@ -120,7 +121,7 @@ static int source (PAL_HANDLE stream)
 {
     char t[512];
     char * buf;
-    uint64_t msgsize;
+    uint64_t msgsize, memsize;
 
     memset(t, 0, 512);
 
@@ -138,8 +139,9 @@ static int source (PAL_HANDLE stream)
         return 1;
     }
 
-    buf = DkVirtualMemoryAlloc(NULL, msgsize + pal_control.pagesize,
-                               0, PAL_PROT_READ|PAL_PROT_WRITE);
+    memsize = msgsize + pal_control.pagesize - msgsize % pal_control.pagesize;
+    buf = DkVirtualMemoryAlloc(NULL, memsize, 0,
+                               PAL_PROT_READ|PAL_PROT_WRITE);
     if (!buf) {
         pal_printf("no memory\n");
         DkProcessExit(1);
@@ -149,7 +151,7 @@ static int source (PAL_HANDLE stream)
 
     while (DkStreamWrite(stream, 0, msgsize, buf, NULL) > 0);
 
-    DkVirtualMemoryFree(buf, msgsize);
+    DkVirtualMemoryFree(buf, memsize);
     DkObjectClose(stream);
     return 0;
 }
