@@ -6,8 +6,6 @@
 #include "pal_debug.h"
 #include "bench.h"
 
-#define FNAME "/usr/include/x86_64-linux-gnu/sys/types.h"
-
 static void
 do_read(PAL_HANDLE stream, const char * filename)
 {
@@ -77,7 +75,7 @@ int main (int argc, char ** argv, char ** envp)
     char uri[256];
 
     if (argc < 2) goto usage;
-    path = argv[2] ? argv[2] : FNAME;
+    path = argv[2] ? argv[2] : "/dev/zero";
     snprintf(uri, 256, "file:%s", path);
 
     if (strcmp_static(argv[1], "read")) {

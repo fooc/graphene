@@ -50,7 +50,7 @@ done
 
 
 if [ X$FSDIR = X ]
-then	FSDIR=/tmp/lat_fs
+then	FSDIR=file:/tmp/lat_fs/
 fi
 MP=N
 
