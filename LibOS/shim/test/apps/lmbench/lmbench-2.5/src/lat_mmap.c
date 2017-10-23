@@ -89,7 +89,7 @@ main(int ac, char **av)
 		CHK(fd = open(av[2], O_CREAT|O_RDWR, 0666));
 		CHK(ftruncate(fd, size));
 	}
-	BENCH(mapit(fd, size, random), LONGER);
+	BENCH(mapit(fd, size, random), 0);
 	micromb(size, get_n());
 	return(0);
 }
