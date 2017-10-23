@@ -136,12 +136,18 @@ int _DkStreamAttestationRespond (PAL_HANDLE stream, void * data,
                                  handle_read_t read, handle_write_t write,
                                  check_mrenclave_t check_mrenclave,
                                  void * check_param);
+
+
+#define PAL_SEC_INIT_BUFSIZE    (16*4096)
+
 typedef struct {
     PAL_SESSION_KEY key;
 
     /* the following mimic a simplified SSL header */
     struct pal_stream_context {
         LIB_GCM_CONTEXT ctx;
+        void * buf;
+        uint64_t bufsize;
 
         /* the header part / also the additional part in GCM */
         struct {

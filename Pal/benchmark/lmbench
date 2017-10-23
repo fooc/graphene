@@ -50,7 +50,7 @@ done
 
 
 if [ X$FSDIR = X ]
-then	FSDIR=file:/tmp/lat_fs/
+then	FSDIR=/tmp/lat_fs
 fi
 MP=N
 
@@ -114,7 +114,15 @@ then	echo "Can't make a file - $STAT - in $FSDIR" >> ${OUTPUT}
 	exit 1
 fi
 
+function check_run {
+	if [ "x$TESTS" = "x" ]; then echo $1; fi
+	for test in $TESTS
+	do	if [ "$test" = "$1" ]; then echo $1; fi
+	done
+}
+
 function run {
+	if [ "x`check_run $1`" = "x" ]; then return; fi
 	echo "$@"
 	TMPOUT=/tmp/OUT
 	rm -rf $TMPOUT
@@ -127,6 +135,7 @@ function calculate {
 }
 
 function run_repeat_latency {
+	if [ "x`check_run $1`" = "x" ]; then return; fi
 	echo "$@" "($N_RUNS times)"
 	TMPOUT=/tmp/OUT
 	rm -rf $TMPOUT
@@ -140,6 +149,7 @@ function run_repeat_latency {
 }
 
 function run_repeat_bandwidth {
+	if [ "x`check_run $1`" = "x" ]; then return; fi
 	echo "$@" "($N_RUNS times)"
 	TMPOUT=/tmp/OUT
 	rm -rf $TMPOUT
@@ -179,8 +189,20 @@ run lat_proc
 #run lat_pagefault $FILE
 
 #mappings
-#echo Memory mappings >> ${OUTPUT}
-#for i in $ALL; do run lat_mmap $i $FILE; done
+echo Memory mappings >> ${OUTPUT}
+for i in 1m 4m 16m 64m
+do	run_repeat_latency lat_mmap -n $i --
+done
+
+echo Memory mappings >> ${OUTPUT}
+for i in 1m 4m 16m 64m
+do	run_repeat_latency lat_mmap -r $i --
+done
+
+echo Memory mappings >> ${OUTPUT}
+for i in 1m 4m 16m 64m
+do	run_repeat_latency lat_mmap $i --
+done
 
 #0,4,10KB create/delete
 date >> ${OUTPUT}

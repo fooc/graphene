@@ -251,6 +251,8 @@ unmap:
     if (ret < 0)
         goto failed;
 
+    SGX_DBG(DBG_S, "verfied: %s %s\n", uri, hex2str(hash.bytes));
+
     if (memcmp(&hash, &tf->checksum, sizeof(sgx_checksum_t))) {
         ret = -PAL_ERROR_DENIED;
         goto failed;
@@ -938,6 +940,27 @@ out:
     return ret;
 }
 
+static int stream_context_alloc_buffer (struct pal_stream_context * ctx,
+                                        uint64_t size)
+{
+    size = ALLOC_ALIGNUP(size);
+
+    if (size <= ctx->bufsize)
+        return 0;
+
+    void * newbuf = NULL;
+    int ret = ocall_alloc_untrusted(size, &newbuf);
+    if (ret < 0)
+        return ret;
+
+    if (ctx->buf)
+        ocall_unmap_untrusted(ctx->buf, ctx->bufsize);
+
+    ctx->buf = newbuf;
+    ctx->bufsize = size;
+    return 0;
+}
+
 int _DkStreamSecureInit (PAL_SESSION_KEY * key, unsigned which,
                          PAL_SEC_CONTEXT ** context)
 {
@@ -969,6 +992,14 @@ int _DkStreamSecureInit (PAL_SESSION_KEY * key, unsigned which,
         sec_ctx->ctxi.hdr.epoch |= SERVER_SIDE_EPOCH;
     if (which == PAL_STREAM_CLIENT)
         sec_ctx->ctxo.hdr.epoch |= SERVER_SIDE_EPOCH;
+
+    ret = stream_context_alloc_buffer(&sec_ctx->ctxi, PAL_SEC_INIT_BUFSIZE);
+    if (ret < 0)
+        return ret;
+
+    ret = stream_context_alloc_buffer(&sec_ctx->ctxo, PAL_SEC_INIT_BUFSIZE);
+    if (ret < 0)
+        return ret;
 
     *context = sec_ctx;
     return 0;
@@ -1021,14 +1052,8 @@ int _DkStreamSecureRead (PAL_HANDLE handle,
     int enc_len = msg_len - sizeof(tag);
     uint8_t * input;
 
-    if (msg_len < pal_state.pagesize) {
-        input = sgx_ocalloc_top(msg_len);
-    } else {
-        ret = ocall_alloc_untrusted(ALLOC_ALIGNUP(msg_len), (void **) &input);
-        if (ret < 0)
-            return ret;
-    }
-
+    stream_context_alloc_buffer(ctx, msg_len);
+    input = ctx->buf;
     int received = 0;
     while (received < msg_len) {
         ret = read(handle, 0, msg_len - received, input + received);
@@ -1070,11 +1095,6 @@ int _DkStreamSecureRead (PAL_HANDLE handle,
     assert((ctx->hdr.epoch & ~SERVER_SIDE_EPOCH) < MAX_EPOCH);
 
 out:
-    if (msg_len < pal_state.pagesize)
-        sgx_ocalloc_top(-msg_len);
-    else
-        ocall_unmap_untrusted(input, ALLOC_ALIGNUP(msg_len));
-
     return ret < 0 ? ret : dec_len;
 }
 
@@ -1096,15 +1116,8 @@ int _DkStreamSecureWrite (PAL_HANDLE handle,
             __hex2str(&ctx->hdr, sizeof(ctx->hdr)),
             __hex2str(&ctx->iv,  sizeof(ctx->iv)));
 
-    uint8_t * output;
-    if (msg_len < pal_state.pagesize) {
-        output = sgx_ocalloc_top(msg_len);
-    } else {
-        ret = ocall_alloc_untrusted(ALLOC_ALIGNUP(msg_len), (void **) &output);
-        if (ret < 0)
-            return ret;
-    }
-
+    stream_context_alloc_buffer(ctx, msg_len);
+    uint8_t * output = ctx->buf;
     uint8_t * enc = output + sizeof(ctx->hdr);
     uint64_t enc_len = 0;
     memcpy(output, &ctx->hdr, sizeof(ctx->hdr));
@@ -1148,10 +1161,5 @@ int _DkStreamSecureWrite (PAL_HANDLE handle,
     assert((ctx->hdr.epoch & ~SERVER_SIDE_EPOCH) < MAX_EPOCH);
 
 out:
-    if (msg_len < pal_state.pagesize)
-        sgx_ocalloc_top(-msg_len);
-    else
-        ocall_unmap_untrusted(output, ALLOC_ALIGNUP(msg_len));
-
     return ret < 0 ? ret : count;
 }

@@ -183,19 +183,24 @@ void micro (const char * s , uint64_t n)
 void
 micromb(uint64_t sz, uint64_t n)
 {
-    double mb, micro;
+    double mb, micro, mean, var, ci;
 
     micro = stop_time - start_time;
     micro /= n;
     mb = sz;
     mb /= MB;
 
-    if (micro >= 10) {
-        pal_printf(FLOATFMT(6) " %ld\n", FLOATNUM(mb, 6), (long) micro);
-    } else {
-        pal_printf(FLOATFMT(6) " " FLOATFMT(3) "\n", FLOATNUM(mb, 6),
-                   FLOATNUM(micro, 6));
-    }
+    if (micro == 0.0) return;
+
+    mean = getmeantime();
+    var = getvariancetime();
+    if (var < 0.0)
+        var = 0.0;
+    ci = ci_width(sqrt(var), results.N);
+
+    pal_printf(FLOATFMT(6) " median=" FLOATFMT(4) " [mean=" FLOATFMT(4) " +/-" FLOATFMT(4)
+               "] microseconds\n",
+               FLOATNUM(mb, 6), FLOATNUM(micro, 4), FLOATNUM(mean, 4), FLOATNUM(ci, 4));
 }
 
 void

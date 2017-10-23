@@ -7,24 +7,38 @@
 #include "bench.h"
 
 static void
-do_read(PAL_HANDLE stream, const char * filename)
+do_read(PAL_HANDLE stream, char * buf, size_t size, size_t maxsize,
+        const char * filename)
 {
-    char c;
+    static uint64_t offset = 0;
 
-    if (DkStreamRead(stream, 0, 1, &c, NULL, 0) != 1) {
+    if (DkStreamRead(stream, offset, size, buf, NULL, 0) != size) {
         pal_printf("DkStreamRead failed on %s\n", filename);
         return;
+    }
+
+    if (maxsize) {
+        offset += size;
+        if (offset + size > maxsize)
+            offset = 0;
     }
 }
 
 static void
-do_write(PAL_HANDLE stream, const char * filename)
+do_write(PAL_HANDLE stream, char * buf, size_t size, size_t maxsize,
+         const char * filename)
 {
-    char c = 1;
+    static uint64_t offset = 0;
 
-    if (DkStreamWrite(stream, 0, 1, &c, NULL) != 1) {
+    if (DkStreamWrite(stream, offset, size, buf, NULL) != size) {
         pal_printf("DkStreamWrite failed on %s\n", filename);
         return;
+    }
+
+    if (maxsize) {
+        offset += size;
+        if (offset + size > maxsize)
+            offset = 0;
     }
 }
 
@@ -73,28 +87,76 @@ int main (int argc, char ** argv, char ** envp)
     PAL_HANDLE stream;
     const char * path;
     char uri[256];
+    char c;
 
     if (argc < 2) goto usage;
     path = argv[2] ? argv[2] : "/dev/zero";
     snprintf(uri, 256, "file:%s", path);
 
     if (strcmp_static(argv[1], "read")) {
+        PAL_STREAM_ATTR attr;
         stream = DkStreamOpen(uri, PAL_ACCESS_RDWR, 0, 0, 0);
         if (!stream) {
             pal_printf("Failed opening %s\n", uri);
             return 1;
         }
-        BENCH(do_read(stream, uri), 0);;
+        if (!DkStreamAttributesQuerybyHandle(stream, &attr)) {
+            pal_printf("Failed querying attributes\n");
+            return 1;
+        }
+        BENCH(do_read(stream, &c, 1, attr.pending_size, uri), 0);;
         micro("DkStreamRead", get_n());
         DkObjectClose(stream);
     } else if (strcmp_static(argv[1], "write")) {
-        stream = DkStreamOpen(uri, PAL_ACCESS_RDWR, PAL_SHARE_OWNER_W,
-                              PAL_CREAT_TRY, 0);
+        PAL_STREAM_ATTR attr;
+        stream = DkStreamOpen(uri, PAL_ACCESS_RDWR, 0, 0, 0);
         if (!stream) {
             pal_printf("Failed opening %s\n", uri);
             return 1;
         }
-        BENCH(do_write(stream, uri), 0);;
+        if (!DkStreamAttributesQuerybyHandle(stream, &attr)) {
+            pal_printf("Failed querying attributes\n");
+            return 1;
+        }
+        BENCH(do_write(stream, &c, 1, attr.pending_size, uri), 0);;
+        micro("DkStreamWrite", get_n());
+        DkObjectClose(stream);
+    } else if (strcmp_static(argv[1], "read-size")) {
+        size_t size = bytes(argv[2]);
+        char * buf = DkVirtualMemoryAlloc(NULL, align_up(size),
+                                          0, PAL_PROT_READ|PAL_PROT_WRITE);
+        PAL_STREAM_ATTR attr;
+        path = argv[3] ? argv[3] : "/dev/zero";
+        snprintf(uri, 256, "file:%s", path);
+        stream = DkStreamOpen(uri, PAL_ACCESS_RDWR, 0, 0, 0);
+        if (!stream) {
+            pal_printf("Failed opening %s\n", uri);
+            return 1;
+        }
+        if (!DkStreamAttributesQuerybyHandle(stream, &attr)) {
+            pal_printf("Failed querying attributes\n");
+            return 1;
+        }
+        BENCH(do_read(stream, buf, size, attr.pending_size, uri), 0);;
+        micro("DkStreamRead", get_n());
+        DkObjectClose(stream);
+    } else if (strcmp_static(argv[1], "write-size")) {
+        size_t size = bytes(argv[2]);
+        char * buf = DkVirtualMemoryAlloc(NULL, align_up(size),
+                                          0, PAL_PROT_READ|PAL_PROT_WRITE);
+        PAL_STREAM_ATTR attr;
+        path = argv[3] ? argv[3] : "/dev/zero";
+        snprintf(uri, 256, "file:%s", path);
+        stream = DkStreamOpen(uri, PAL_ACCESS_RDWR, 0, 0, 0);
+        if (!stream) {
+            pal_printf("Failed opening %s\n", uri);
+            return 1;
+        }
+        if (!DkStreamAttributesQuerybyHandle(stream, &attr)) {
+            pal_printf("Failed querying attributes\n");
+            return 1;
+        }
+        BENCH(do_write(stream, buf, size, attr.pending_size, uri), 0);;
         micro("DkStreamWrite", get_n());
         DkObjectClose(stream);
     } else if (strcmp_static(argv[1], "open")) {

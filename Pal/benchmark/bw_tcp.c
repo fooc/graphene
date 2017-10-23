@@ -57,7 +57,7 @@ static void client_main(int argc, const char ** argv)
         DkProcessExit(0);
     }
 
-    memsize = msgsize + pal_control.pagesize - msgsize % pal_control.pagesize;
+    memsize = align_up(msgsize);
     buf = DkVirtualMemoryAlloc(NULL, memsize, 0,
                                PAL_PROT_READ|PAL_PROT_WRITE);
     if (!buf) {
@@ -65,7 +65,7 @@ static void client_main(int argc, const char ** argv)
         DkProcessExit(1);
     }
 
-    memset(buf, 0, msgsize + pal_control.pagesize);
+    memset(buf, 0, msgsize);
 
     snprintf(uri, 256, "tcp:%s:%d", argv[1], PORT);
     server = DkStreamOpen(uri, PAL_ACCESS_RDWR, 0, 0, 0);
@@ -139,7 +139,7 @@ static int source (PAL_HANDLE stream)
         return 1;
     }
 
-    memsize = msgsize + pal_control.pagesize - msgsize % pal_control.pagesize;
+    memsize = align_up(msgsize);
     buf = DkVirtualMemoryAlloc(NULL, memsize, 0,
                                PAL_PROT_READ|PAL_PROT_WRITE);
     if (!buf) {

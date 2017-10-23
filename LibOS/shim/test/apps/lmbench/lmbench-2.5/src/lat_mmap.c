@@ -33,21 +33,26 @@ mapit(int fd, size_t size, int random)
 	char	*p, *where, *end;
 	char	c = size & 0xff;
 
+	if (fd == -1) {
+		where = mmap(0, size, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANON, -1, 0);
+	} else {
 #ifdef	MAP_FILE
-	where = mmap(0, size, PROT_READ|PROT_WRITE, MAP_FILE|MAP_SHARED, fd, 0);
+		where = mmap(0, size, PROT_READ|PROT_WRITE, MAP_FILE|MAP_SHARED, fd, 0);
 #else
-	where = mmap(0, size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+		where = mmap(0, size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 #endif
+	}
+
 	if ((int)where == -1) {
 		perror("mmap");
 		exit(1);
 	}
-	if (random) {
+	if (random == 1) {
 		end = where + size;
 		for (p = where; p < end; p += STRIDE) {
 			*p = c;
 		}
-	} else {
+	} else if (!random) {
 		end = where + (size / N);
 		for (p = where; p < end; p += PSIZE) {
 			*p = c;
@@ -59,26 +64,32 @@ mapit(int fd, size_t size, int random)
 int
 main(int ac, char **av)
 {
-	int	fd;
+	int	fd = -1;
 	size_t	size;
 	int	random = 0;
 	char	*prog = av[0];
 
 	if (ac != 3 && ac != 4) {
-		fprintf(stderr, "usage: %s [-r] size file\n", prog);
+		fprintf(stderr, "usage: %s [-r|-n] size [file|--]\n", prog);
 		exit(1);
 	}
 	if (strcmp("-r", av[1]) == 0) {
 		random = 1;
 		ac--, av++;
 	}
+	if (strcmp("-n", av[1]) == 0) {
+		random = -1;
+		ac--, av++;
+	}
 	size = bytes(av[1]);
 	if (size < MINSIZE) {	
 		return (1);
 	}
-	CHK(fd = open(av[2], O_CREAT|O_RDWR, 0666));
-	CHK(ftruncate(fd, size));
-	BENCH(mapit(fd, size, random), 0);
+	if (strcmp(av[2], "--")) {
+		CHK(fd = open(av[2], O_CREAT|O_RDWR, 0666));
+		CHK(ftruncate(fd, size));
+	}
+	BENCH(mapit(fd, size, random), LONGER);
 	micromb(size, get_n());
 	return(0);
 }

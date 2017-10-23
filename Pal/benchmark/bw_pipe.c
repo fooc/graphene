@@ -17,7 +17,7 @@ int main (int argc, char ** argv, char ** envp)
     PAL_HANDLE proc, srv, control, pipe;
     uint64_t msgsize = XFERSIZE, memsize;
 
-    memsize = msgsize + pal_control.pagesize - msgsize % pal_control.pagesize;
+    memsize = align_up(msgsize);
     buf = DkVirtualMemoryAlloc(NULL, memsize, 0,
                                PAL_PROT_READ|PAL_PROT_WRITE);
     if (!buf) {

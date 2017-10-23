@@ -36,9 +36,9 @@ manifest: manifest.template
 	cp -f $< $@
 
 ifeq ($(SYS),x86_64-linux-gnu)
-$(executables): %: %.c $(graphene_lib) $(pal_lib) $(patsubst %.c,%.o,$(lib_files)) ../src/user_start.o $(headers)
+$(executables): %: %.c $(patsubst %.c,%.o,$(lib_files)) ../src/user_start.o $(graphene_lib) $(pal_lib) $(headers)
 	@echo [ $@ ]
-	@$(CC) $(CFLAGS) $^ -o $@
+	@$(CC) $(CFLAGS) $(filter-out $(headers),$^) -o $@
 
 %.o: %.c $(headers)
 	@echo [ $@ ]
@@ -56,7 +56,7 @@ $(executables): .packed/benchmark.tar.gz
 endif
 
 test: all
-	env LOADER=./pal_loader OS=PAL OUTPUT=lmbench-results ./lmbench
+	env LOADER=./pal_loader ./run-tests
 
 clean:
 	rm -rf $(patsubst %.c,%.o,$(lib_files))

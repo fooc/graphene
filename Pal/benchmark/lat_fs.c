@@ -18,7 +18,7 @@ int main(int argc, const char ** argv, const char ** envp)
 {
     static int sizes[] = { 0, 1024, 4096, 10*1024 };
     extern char * names[];
-    const char * prefix = "file:";
+    const char * prefix = (argc == 2) ? argv[1] : ".";
     int i, j, pos;
     double tmp, create_m, delete_m;
     double create_mean, delete_mean, create_var, delete_var;
@@ -32,9 +32,6 @@ int main(int argc, const char ** argv, const char ** envp)
         pal_printf("OUT OF MEMORY\n");
         return -1;
     }
-
-    if (argc == 2)
-        prefix = argv[1];
 
     for (j = 0; j < ITER; ++j) {
         rmfile(prefix, names[j], 1);
@@ -76,14 +73,14 @@ int main(int argc, const char ** argv, const char ** envp)
 
         pal_printf("%dk\tN=%d\n", sizes[i]>>10, ITER);
 
-        pal_printf("\tcreate/time max=%llu\t mean=%llu (+/-%llu)\n",
-            (uint64_t) ITER / create_m,
-            (uint64_t) create_mean,
+        pal_printf("\tcreate/time max=%lu\t mean=%lu (+/-%lu)\n",
+            (uint64_t) (ITER / create_m),
+            (uint64_t) (create_mean),
             (uint64_t) ci_width(sqrt(create_var), pos));
 
-        pal_printf("\tdelete/time max=%llu\t mean=%llu (+/-%llu)\n",
-            (uint64_t) ITER / delete_m,
-            (uint64_t) delete_mean,
+        pal_printf("\tdelete/time max=%lu\t mean=%lu (+/-%lu)\n",
+            (uint64_t) (ITER / delete_m),
+            (uint64_t) (delete_mean),
             (uint64_t) ci_width(sqrt(delete_var), pos));
     }
 
@@ -96,8 +93,7 @@ static void mkfile (const char * prefix, const char *s, int sz)
     char uri[256];
     char buf[128*1024];  /* XXX - track sizes */
 
-    memcpy(uri, prefix, strlen(prefix));
-    memcpy(uri + strlen(prefix), s, strlen(s) + 1);
+    snprintf(uri, 256, "file:%s/%s", prefix, s);
 
     file = DkStreamOpen(uri, PAL_ACCESS_RDWR,
                         PAL_SHARE_OWNER_W|PAL_SHARE_OWNER_R,
@@ -117,8 +113,7 @@ static void rmfile (const char * prefix, const char *s, int force)
     PAL_HANDLE file;
     char uri[256];
 
-    memcpy(uri, prefix, strlen(prefix));
-    memcpy(uri + strlen(prefix), s, strlen(s) + 1);
+    snprintf(uri, 256, "file:%s/%s", prefix, s);
 
     file = DkStreamOpen(uri, 0, 0, 0, 0);
 

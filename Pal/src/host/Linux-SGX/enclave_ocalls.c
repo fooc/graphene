@@ -221,15 +221,16 @@ int ocall_read (int fd, void * buf, unsigned int count)
     OCALLOC(ms, ms_ocall_read_t *, sizeof(*ms));
 
     ms->ms_fd = fd;
-    if (obuf)
+    if (obuf) {
         ms->ms_buf = obuf;
-    else
+    } else {
         OCALLOC(ms->ms_buf, void *, count);
+    }
     ms->ms_count = count;
 
     retval = SGX_OCALL(OCALL_READ, ms);
 
-    if (retval > 0 && buf != ms->ms_buf)
+    if (retval > 0 && !obuf)
         memcpy(buf, ms->ms_buf, retval);
 
     OCALL_EXIT();
@@ -242,7 +243,7 @@ int ocall_write (int fd, const void * buf, unsigned int count)
     void * obuf = NULL;
 
     if (buf && !sgx_is_within_enclave(buf, count))
-        obuf = (void *) buf;
+        obuf = buf;
 
     ms_ocall_write_t * ms;
     OCALLOC(ms, ms_ocall_write_t *, sizeof(*ms));
@@ -250,8 +251,6 @@ int ocall_write (int fd, const void * buf, unsigned int count)
     ms->ms_fd = fd;
     if (obuf) {
         ms->ms_buf = obuf;
-        if (buf != obuf)
-            memcpy(obuf, buf, count);
     } else {
         ms->ms_buf = COPY_TO_USER(buf, count);
     }
@@ -577,7 +576,7 @@ int ocall_sock_recv (int sockfd, void * buf, unsigned int count,
             return -PAL_ERROR_DENIED;
         }
 
-        if (buf != obuf)
+        if (!obuf)
             COPY_FROM_USER(buf, ms->ms_buf, retval);
 
         COPY_FROM_USER(addr, ms->ms_addr, ms->ms_addrlen);
@@ -592,11 +591,20 @@ int ocall_sock_send (int sockfd, const void * buf, unsigned int count,
                      const struct sockaddr * addr, unsigned int addrlen)
 {
     int retval = 0;
+    void * obuf = NULL;
+
+    if (buf && !sgx_is_within_enclave(buf, count))
+        obuf = buf;
+
     ms_ocall_sock_send_t * ms;
     OCALLOC(ms, ms_ocall_sock_send_t *, sizeof(*ms));
 
     ms->ms_sockfd = sockfd;
-    ms->ms_buf = COPY_TO_USER(buf, count);
+    if (obuf) {
+        ms->ms_buf = obuf;
+    } else {
+        ms->ms_buf = COPY_TO_USER(buf, count);
+    }
     ms->ms_count = count;
     ms->ms_addr = addr ? COPY_TO_USER(addr, addrlen) : NULL;
     ms->ms_addrlen = addrlen;

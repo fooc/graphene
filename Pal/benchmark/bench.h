@@ -4,7 +4,13 @@
 #ifndef _BENCH_H
 #define _BENCH_H
 
+#include <pal.h>
 #include <stdint.h>
+
+#define pageshift       (pal_control.pagesize - 1)
+#define pagemask        (~pageshift)
+#define align_up(val)   ((val + pageshift) & pagemask)
+#define align_down(val) ((val) & pagemask)
 
 #ifndef XFERSIZE
 #define XFERSIZE        (64*1024)   /* all bandwidth I/O should use this */
