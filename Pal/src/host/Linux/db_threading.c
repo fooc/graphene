@@ -67,15 +67,18 @@ int _DkThreadCreate (PAL_HANDLE * handle, int (*callback) (void *),
     int tid = 0;
     int ret = clone(callback, child_stack,
                     CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SYSVSEM|
-                    CLONE_THREAD|CLONE_SIGHAND|CLONE_PTRACE|
-                    CLONE_PARENT_SETTID,
+                    CLONE_SIGHAND|CLONE_PTRACE|CLONE_PARENT_SETTID,
                     param, &tid, NULL);
-    if (IS_ERR(ret))
+
+    if (IS_ERR(ret)) {
+        _DkVirtualMemoryFree(child_stack - THREAD_STACK_SIZE, THREAD_STACK_SIZE);
         return -PAL_ERROR_DENIED;
+    }
 
     PAL_HANDLE hdl = malloc(HANDLE_SIZE(thread));
     SET_HANDLE_TYPE(hdl, thread);
     hdl->thread.tid = tid;
+    hdl->thread.stack = child_stack;
     *handle = hdl;
 
     /* _DkThreadAdd(tid); */
@@ -133,6 +136,21 @@ int _DkThreadResume (PAL_HANDLE threadHandle)
     return 0;
 }
 
+static int thread_close (PAL_HANDLE handle)
+{
+    _DkVirtualMemoryFree(handle->thread.stack - THREAD_STACK_SIZE,
+                         THREAD_STACK_SIZE);
+    return 0;
+}
+
+static int thread_wait (PAL_HANDLE handle, uint64_t timeout)
+{
+    int status;
+    INLINE_SYSCALL(wait4, 4, handle->thread.tid, &status, __WALL, NULL);
+    return 0;
+}
+
 struct handle_ops thread_ops = {
-    /* nothing */
+    .close      = thread_close,
+    .wait       = thread_wait,
 };

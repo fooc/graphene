@@ -202,8 +202,18 @@ run lat_pagefault $FILE
 #mappings
 echo Memory mappings >> ${OUTPUT}
 for i in 1m 4m 16m 64m
-do	run_repeat_latency lat_mmap $i $FILE; done
+do	run_repeat_latency lat_mmap -n $i --
 done
+echo Memory mappings >> ${OUTPUT}
+for i in 1m 4m 16m 64m
+do	run_repeat_latency lat_mmap -r $i --
+done
+echo Memory mappings >> ${OUTPUT}
+for i in 1m 4m 16m 64m
+do	run_repeat_latency lat_mmap $i --
+done
+
+
 
 #0,4,10KB create/delete
 date >> ${OUTPUT}

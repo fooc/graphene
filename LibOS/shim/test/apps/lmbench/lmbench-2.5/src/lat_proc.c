@@ -15,6 +15,12 @@ char	*id = "$Id$\n";
 
 #include "bench.h"
 
+#define __USE_GNU
+#include <sched.h>
+#include <unistd.h>
+#include <sys/syscall.h>
+#include <linux/futex.h>
+
 #ifdef STATIC
 #define	PROG "/tmp/hello-s"
 #else
@@ -165,7 +171,30 @@ void do_procedure(int r)
 {
 	use_int(r);
 }
-	
+
+int cb(void *arg)
+{
+	syscall(__NR_exit, 0);
+}
+
+void do_clone(void *stack)
+{
+	int	tid;
+	int	status;
+
+	tid = clone(cb, stack, CLONE_VM|CLONE_FS|CLONE_FILES|
+			       CLONE_SYSVSEM|CLONE_SIGHAND,
+			       NULL);
+	if (tid == -1) {
+		perror("clone");
+		exit(1);
+	}
+	while (waitpid(tid, &status, __WALL) != tid)
+		;
+	if (WEXITSTATUS(status))
+		exit(WEXITSTATUS(status));
+}
+
 int
 main(int ac, char **av)
 {
@@ -225,8 +254,16 @@ main(int ac, char **av)
 #else
 		micro("Process fork+/bin/sh -c", get_n());
 #endif
+	} else if (!strcmp("clone", av[1])) {
+		void *stack = malloc(4096) + 4096;
+		BENCH(do_clone(stack), 0);
+#ifdef STATIC
+		micro("Static Thread creation+exit", get_n());
+#else
+		micro("Thread create+exit", get_n());
+#endif
 	} else {
-usage:		printf("Usage: %s fork|vfork|exec|shell|dfork|dforkexec\n", av[0]);
+usage:		printf("Usage: %s fork|vfork|exec|shell|dfork|dforkexec|clone\n", av[0]);
 	}
 	return(0);
 }

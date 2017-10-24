@@ -64,10 +64,12 @@ int printf(const char * fmt, ...);
         } _ret;                                             \
     })
 
+int sgx_call_exit(void);
+
 int ocall_exit(void)
 {
     int retval = 0;
-    SGX_OCALL(OCALL_EXIT, NULL);
+    sgx_ocall_exit();
     /* never reach here */
     return retval;
 }
@@ -379,6 +381,11 @@ int ocall_getdents (int fd, struct linux_dirent64 * dirp, unsigned int size)
 int ocall_wake_thread (void * tcs)
 {
     return SGX_OCALL(OCALL_WAKE_THREAD, tcs);
+}
+
+int ocall_wait_thread (void * tcs)
+{
+    return SGX_OCALL(OCALL_WAIT_THREAD, tcs);
 }
 
 int ocall_create_process (const char * uri,
