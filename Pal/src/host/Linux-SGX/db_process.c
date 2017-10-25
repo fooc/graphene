@@ -358,7 +358,7 @@ void _DkProcessExit (int exitcode)
 #if PRINT_ENCLAVE_STAT
     print_alloced_pages();
 #endif
-    ocall_exit();
+    ocall_exit(exitcode|OCALL_EXIT_WHOLE_PROCESS);
 }
 
 int _DkProcessSandboxCreate (const char * manifest, int flags)

@@ -226,26 +226,26 @@ main(int ac, char **av)
 #else
 		micro("Process double fork+exit", get_n());
 #endif
-	} else if (!strcmp("vfork", av[1])) {
+	} else if (!strcmp("vforkexec", av[1])) {
 		BENCH(do_vforkexec(), 0);
 #ifdef STATIC
-		micro("Static Process vfork+execve", get_n());
+		micro("Static Process vfork+execve+exit", get_n());
 #else
-		micro("Process vfork+execve", get_n());
+		micro("Process vfork+execve+exit", get_n());
 #endif
 	} else if (!strcmp("exec", av[1])) {
 		BENCH(do_forkexec(), 0);
 #ifdef STATIC
 		micro("Static Process fork+execve", get_n());
 #else
-		micro("Process fork+execve", get_n());
+		micro("Process fork+execve+exit", get_n());
 #endif
 	} else if (!strcmp("dforkexec", av[1])) {
 		BENCH(do_dforkexec(), 0);
 #ifdef STATIC
 		micro("Static Process double fork+execve", get_n());
 #else
-		micro("Process double fork+execve", get_n());
+		micro("Process double fork+execve+exit", get_n());
 #endif
 	} else if (!strcmp("shell", av[1])) {
 		BENCH(do_shell(), 0);
@@ -263,7 +263,7 @@ main(int ac, char **av)
 		micro("Thread create+exit", get_n());
 #endif
 	} else {
-usage:		printf("Usage: %s fork|vfork|exec|shell|dfork|dforkexec|clone\n", av[0]);
+usage:		printf("Usage: %s fork|vforkexec|exec|shell|dfork|dforkexec|clone\n", av[0]);
 	}
 	return(0);
 }

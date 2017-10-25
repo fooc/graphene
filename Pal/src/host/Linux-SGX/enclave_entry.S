@@ -263,7 +263,6 @@ sgx_ocall:
 	.type sgx_ocall_exit, @function
 
 sgx_ocall_exit:
-	xor %rdi, %rdi
 	xor %rdx, %rdx
 	xor %r8, %r8
 	xor %r9, %r9

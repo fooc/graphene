@@ -66,7 +66,7 @@ int _DkThreadCreate (PAL_HANDLE * handle, int (*callback) (void *),
 
     int tid = 0;
     int ret = clone(callback, child_stack,
-                    CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SYSVSEM|
+                    CLONE_VM|CLONE_THREAD|CLONE_FS|CLONE_FILES|CLONE_SYSVSEM|
                     CLONE_SIGHAND|CLONE_PTRACE|CLONE_PARENT_SETTID,
                     param, &tid, NULL);
 

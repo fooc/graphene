@@ -1044,7 +1044,7 @@ int _DkStreamSecureRead (PAL_HANDLE handle,
     int ret;
 
     ret = read(handle, offset, sizeof(ctx->hdr), &ctx->hdr);
-    if (ret < 0)
+    if (ret <= 0)
         return ret;
 
     assert(ret == sizeof(ctx->hdr));

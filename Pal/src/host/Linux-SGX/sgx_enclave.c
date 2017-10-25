@@ -26,7 +26,11 @@ void thread_exit (void);
 
 static int sgx_ocall_exit(void * pms)
 {
-    ODEBUG(OCALL_EXIT, NULL);
+    int exit_status = (int) pms;
+    ODEBUG(OCALL_EXIT, exit_status);
+    if (exit_status & OCALL_EXIT_WHOLE_PROCESS) {
+        INLINE_SYSCALL(exit_group, 1, (exit_status & ~OCALL_EXIT_WHOLE_PROCESS));
+    }
     thread_exit();
     return 0;
 }
