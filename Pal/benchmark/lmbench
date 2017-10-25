@@ -171,13 +171,13 @@ run lat_file attrquerybyhdl $STAT
 run lat_file open $STAT
 
 #select file (500), select tcp (500)
-#for i in 10 100 250 500; do run lat_select file $i; done
-#for i in 10 100 250 500; do run lat_select tcp $i; done
+for i in 64 128 256 512; do run lat_select file $i $STAT; done
+for i in 64 128 256 512; do run lat_select tcp $i; done
 
 #sig install, sig_overhead, prot. Fault
-#run lat_sig install
-#run lat_sig catch
-#run lat_sig prot lat_sig
+run lat_sig install
+run lat_sig catch
+run lat_sig prot $STAT
 
 #pipes
 echo Pipe latency >> ${OUTPUT}

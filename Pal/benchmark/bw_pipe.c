@@ -62,6 +62,7 @@ int main (int argc, char ** argv, char ** envp)
             return 1;
         }
 
+        buf += 128;    /* destroy page alignment */
         BENCH(reader(control, pipe, blocksize), MEDIUM);
         pal_printf("Pipe bandwidth: ");
         mb(get_n() * blocksize);
