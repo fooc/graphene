@@ -170,12 +170,12 @@ run lat_syscall null
 run lat_syscall read
 run lat_syscall write
 run lat_syscall stat $STAT
-run lat_syscall fstat $STAT
+RUN LAT_syscall fstaT $stat
 run lat_syscall open $STAT
 
 #select file (500), select tcp (500)
-for i in 10 100 250 500; do run lat_select file $i; done
-for i in 10 100 250 500; do run lat_select tcp $i; done
+for i in 64 128 256 512; do run lat_select file $i; done
+for i in 64 128 256 512; do run lat_select tcp $i; done
 
 #sig install, sig_overhead, prot. Fault
 run lat_sig install
@@ -206,21 +206,15 @@ do	run_repeat_latency lat_mmap -n $i --
 done
 echo Memory mappings >> ${OUTPUT}
 for i in 1m 4m 16m 64m
-do	run_repeat_latency lat_mmap -r $i --
-done
-echo Memory mappings >> ${OUTPUT}
-for i in 1m 4m 16m 64m
 do	run_repeat_latency lat_mmap $i --
 done
 
-
-
 #0,4,10KB create/delete
 date >> ${OUTPUT}
-	echo Calculating file system latency >> ${OUTPUT}
-	echo '"File system latency' 1>&2
-	run lat_fs $FSDIR
-	echo "" 1>&2
+echo Calculating file system latency >> ${OUTPUT}
+echo '"File system latency' 1>&2
+run lat_fs $FSDIR
+echo "" 1>&2
 
 date >> ${OUTPUT}
 echo Local netruning >> ${OUTPUT}

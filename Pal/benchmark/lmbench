@@ -194,9 +194,6 @@ for i in 1m 4m 16m 64m
 do	run_repeat_latency lat_mmap -n $i --
 done
 for i in 1m 4m 16m 64m
-do	run_repeat_latency lat_mmap -r $i --
-done
-for i in 1m 4m 16m 64m
 do	run_repeat_latency lat_mmap $i --
 done
 

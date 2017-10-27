@@ -743,21 +743,32 @@ int ocall_sleep (unsigned long * microsec)
     return retval;
 }
 
-int ocall_poll (struct pollfd * fds, int nfds, uint64_t * timeout)
+int ocall_select (int nfds, __kernel_fd_set * readfds,
+                  __kernel_fd_set * writefds, __kernel_fd_set * errorfds,
+                  uint64_t * timeout)
 {
     int retval = 0;
-    ms_ocall_poll_t * ms;
-    OCALLOC(ms, ms_ocall_poll_t *, sizeof(*ms));
+    int fdsize = __NFDBITS * __FD_ELT(nfds);
+    ms_ocall_select_t * ms;
+    OCALLOC(ms, ms_ocall_select_t *, sizeof(*ms));
 
-    ms->ms_fds = COPY_TO_USER(fds, sizeof(struct pollfd) * nfds);
+    ms->ms_readfds = readfds ? COPY_TO_USER(readfds, fdsize) : NULL;
+    ms->ms_writefds = writefds ? COPY_TO_USER(writefds, fdsize) : NULL;
+    ms->ms_errorfds = errorfds ? COPY_TO_USER(errorfds, fdsize) : NULL;
     ms->ms_nfds = nfds;
     ms->ms_timeout = timeout ? *timeout : OCALL_NO_TIMEOUT;
 
-    retval = SGX_OCALL(OCALL_POLL, ms);
+    retval = SGX_OCALL(OCALL_SELECT, ms);
     if (retval == -EINTR && timeout)
         *timeout = ms->ms_timeout;
-    if (retval >= 0)
-        COPY_FROM_USER(fds, ms->ms_fds, sizeof(struct pollfd) * nfds);
+    if (retval >= 0) {
+        if (ms->ms_readfds)
+            COPY_FROM_USER(readfds, ms->ms_readfds, fdsize);
+        if (ms->ms_writefds)
+            COPY_FROM_USER(writefds, ms->ms_writefds, fdsize);
+        if (ms->ms_errorfds)
+            COPY_FROM_USER(errorfds, ms->ms_errorfds, fdsize);
+    }
     OCALL_EXIT();
     return retval;
 }

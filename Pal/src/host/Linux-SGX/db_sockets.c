@@ -35,12 +35,11 @@
 #include "api.h"
 
 #include <linux/types.h>
-#include <linux/poll.h>
 #include <linux/in.h>
 #include <linux/in6.h>
 typedef __kernel_pid_t pid_t;
 #include <asm/fcntl.h>
-#include <asm-generic/socket.h>
+#include <asm/socket.h>
 
 #ifndef SOL_TCP
 # define SOL_TCP 6
@@ -775,13 +774,14 @@ static int socket_attrquerybyhdl (PAL_HANDLE handle, PAL_STREAM_ATTR  * attr)
         attr->pending_size = ret;
     }
 
-    struct pollfd pfd = { .fd = fd, .events = POLLIN, .revents = 0 };
+    __kernel_fd_set fds;
+    __FD_ZERO(&fds);
+    __FD_SET(fd, &fds);
     unsigned long waittime = 0;
-    ret = ocall_poll(&pfd, 1, &waittime);
+    ret = ocall_select(fd + 1, &fds, NULL, NULL, &waittime);
     if (ret < 0)
         return ret;
-    attr->readable = (ret == 1 && pfd.revents == POLLIN);
-
+    attr->readable = (ret == 1 && __FD_ISSET(fd, &fds));
     return 0;
 }
 

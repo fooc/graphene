@@ -17,6 +17,8 @@ net.allow_bind.1 = 127.0.0.1:8000
 # allow to connect to port 8000
 net.allow_peer.1 = 127.0.0.1:8000
 
+sgx.enclave_size = 256M
+
 sgx.trusted_files.tmp1 = file:/tmp/XXX
 sgx.trusted_files.tmp2 = file:/tmp/YYY/YYY/XXX
 sgx.trusted_files.tmp3 = file:/tmp/YYY/YYY/YYY/YYY/XXX

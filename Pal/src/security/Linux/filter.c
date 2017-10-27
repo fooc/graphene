@@ -17,7 +17,6 @@ typedef __builtin_va_list __gnuc_va_list;
 #include <linux/limits.h>
 #include <linux/sched.h>
 #include <linux/prctl.h>
-#include <sys/socket.h>
 #include <asm/fcntl.h>
 #include <asm/mman.h>
 #include <asm/ioctls.h>
@@ -57,7 +56,7 @@ typedef __builtin_va_list __gnuc_va_list;
     SYSCALL(__NR_munmap,        ALLOW),                  \
     SYSCALL(__NR_nanosleep,     ALLOW),                  \
     SYSCALL(__NR_pipe2,         ALLOW),                  \
-    SYSCALL(__NR_ppoll,         ALLOW),                  \
+    SYSCALL(__NR_pselect6,      ALLOW),                  \
     SYSCALL(__NR_read,          ALLOW),                  \
     SYSCALL(__NR_readlink,      ALLOW),                  \
     SYSCALL(__NR_recvmsg,       ALLOW),                  \
