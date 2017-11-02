@@ -66,6 +66,7 @@ int main (int argc, char ** argv, char ** envp)
         BENCH(reader(control, pipe, blocksize), MEDIUM);
         pal_printf("Pipe bandwidth: ");
         mb(get_n() * blocksize);
+        micro("Pipe latency", get_n());
 
         DkObjectClose(control);
         DkObjectClose(pipe);

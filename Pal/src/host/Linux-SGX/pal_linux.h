@@ -149,6 +149,7 @@ typedef struct {
         LIB_GCM_CONTEXT ctx;
         void * buf;
         uint64_t bufsize;
+        uint64_t bufoffset;
 
         /* the header part / also the additional part in GCM */
         struct {

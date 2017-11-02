@@ -3,7 +3,7 @@ PYTHON_INSTALL = $(PYTHON_SRC)/build
 
 manifests = python.manifest
 
-target = benchmarks
+target =
 exec_target = $(manifests)
 
 extra_rules = -e 's:\$$(PYTHONDIR):$(PYTHON_INSTALL)/:g'

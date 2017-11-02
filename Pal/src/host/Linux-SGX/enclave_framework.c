@@ -948,16 +948,23 @@ static int stream_context_alloc_buffer (struct pal_stream_context * ctx,
     if (size <= ctx->bufsize)
         return 0;
 
+    uint64_t newsize = ctx->bufsize ? : size;
+    while (newsize < size)
+        newsize *= 2;
+
     void * newbuf = NULL;
-    int ret = ocall_alloc_untrusted(size, &newbuf);
+    int ret = ocall_alloc_untrusted(newsize, &newbuf);
     if (ret < 0)
         return ret;
+
+    if (ctx->bufoffset)
+        memcpy(newbuf, ctx->buf, ctx->bufoffset);
 
     if (ctx->buf)
         ocall_unmap_untrusted(ctx->buf, ctx->bufsize);
 
     ctx->buf = newbuf;
-    ctx->bufsize = size;
+    ctx->bufsize = newsize;
     return 0;
 }
 
@@ -1040,34 +1047,48 @@ int _DkStreamSecureRead (PAL_HANDLE handle,
                          int offset, int count, void * buffer)
 {
     struct pal_stream_context * ctx = &sec_ctx->ctxi;
-    uint8_t tag[GCM_TAG_SIZE];
     int ret;
 
-    ret = read(handle, offset, sizeof(ctx->hdr), &ctx->hdr);
-    if (ret <= 0)
-        return ret;
+    if (ctx->bufoffset < sizeof(ctx->hdr)) {
+        ret = read(handle, offset, ctx->bufsize - ctx->bufoffset,
+                   ctx->buf + ctx->bufoffset);
 
-    assert(ret == sizeof(ctx->hdr));
-    int msg_len = ctx->hdr.msg_len - sizeof(ctx->hdr);
-    int enc_len = msg_len - sizeof(tag);
-    uint8_t * input;
+        if (ret <= 0)
+            return ret;
 
-    stream_context_alloc_buffer(ctx, msg_len);
-    input = ctx->buf;
-    int received = 0;
-    while (received < msg_len) {
-        ret = read(handle, 0, msg_len - received, input + received);
-        if (ret < 0)
-            goto out;
+        ctx->bufoffset += ret;
+        if (ctx->bufoffset < sizeof(ctx->hdr))
+            return -PAL_ERROR_TRYAGAIN;
 
-        received += ret;
+        memcpy(&ctx->hdr, ctx->buf, sizeof(ctx->hdr));
     }
 
+    stream_context_alloc_buffer(ctx, ctx->hdr.msg_len);
+    if (ctx->bufsize < ctx->hdr.msg_len)
+        return -PAL_ERROR_NOMEM;
+
+
+    if (ctx->bufoffset < ctx->hdr.msg_len) {
+        ret = read(handle, offset, ctx->bufsize - ctx->bufoffset,
+                   ctx->buf + ctx->bufoffset);
+
+        if (ret <= 0)
+            return ret;
+
+        ctx->bufoffset += ret;
+        if (ctx->bufoffset < ctx->hdr.msg_len)
+            return -PAL_ERROR_TRYAGAIN;
+    }
+
+    int msg_len = ctx->hdr.msg_len - sizeof(ctx->hdr);
+    int enc_len = msg_len - GCM_TAG_SIZE;
+    uint8_t * input = ctx->buf + sizeof(ctx->hdr);
+    uint8_t * tag = input + enc_len;
+
     SGX_DBG(DBG_O, "[DEC %08lx] Received %d bytes from the stream\n",
-            ctx->hdr.epoch, received + sizeof(ctx->hdr));
+            ctx->hdr.epoch, ctx->bufoffset);
 
     ctx->iv.nonce = ctx->hdr.epoch;
-    memcpy(&tag, input + enc_len, sizeof(tag));
 
     SGX_DBG(DBG_O, "[DEC %08lx] Header = %s IV = %s\n",
             ctx->hdr.epoch,
@@ -1076,10 +1097,12 @@ int _DkStreamSecureRead (PAL_HANDLE handle,
 
     if (enc_len > 16)
         SGX_DBG(DBG_O, "[DEC %08lx] Enc = %s ... (%d bytes) Tag = %s\n",
-                ctx->hdr.epoch, __hex2str(input, 16), enc_len, hex2str(tag));
+                ctx->hdr.epoch, __hex2str(input, 16), enc_len,
+                __hex2str(tag, GCM_TAG_SIZE));
     else
         SGX_DBG(DBG_O, "[DEC %08lx] Enc = %s Tag = %s\n",
-                ctx->hdr.epoch, __hex2str(input, enc_len), hex2str(tag));
+                ctx->hdr.epoch, __hex2str(input, enc_len),
+                __hex2str(tag, GCM_TAG_SIZE));
 
     uint64_t dec_len = count;
     ret = lib_AESGCMAuthDecrypt(&ctx->ctx,
@@ -1089,9 +1112,11 @@ int _DkStreamSecureRead (PAL_HANDLE handle,
                                 sizeof(ctx->hdr),
                                 input, enc_len,
                                 (uint8_t *) buffer, &dec_len,
-                                (uint8_t *) &tag, sizeof(tag));
+                                tag, GCM_TAG_SIZE);
 
     ctx->hdr.epoch++;
+    ctx->bufoffset -= ctx->hdr.msg_len;
+    memmove(ctx->buf, ctx->buf + ctx->hdr.msg_len, ctx->bufoffset);
     assert((ctx->hdr.epoch & ~SERVER_SIDE_EPOCH) < MAX_EPOCH);
 
 out:
